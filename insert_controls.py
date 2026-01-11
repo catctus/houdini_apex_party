@@ -1,3 +1,18 @@
+"""
+This apex script component helps add secondary and offset controls to an already defined transform.
+Pretty common operation. 
+
+I added the header and footer, but could just be deleted, and use header + template as component
+"""
+HoudiniVersion("21.0.440")
+rigname: String = BindInput()
+character: Geometry = BindInput()
+graph: ApexGraphHandle = BindInput(rig=ApexGraphHandle())
+bypass: Bool = BindInput()
+rigname, graph = character.getRig(graph_name=rigname, graph=graph, bypass=bypass)
+##### header end #####
+
+
 def add_extra_controls(graph: ApexGraphHandle, 
                        #guides: Geometry,
                        target: String,
@@ -26,13 +41,6 @@ def add_extra_controls(graph: ApexGraphHandle,
         
         new_controls.append(beforeCtrl)
         
-        #graph.UpdateNodeProperties(beforeCtrl, {"shapetype":"wirebox"})
-        #graph.ControlShape()
-        #graph.AddSetPointTransforms("pointtransform", [beforeCtrl], srcport="xform")
-        
-        
-        #apex.sek.GetPointTransforms(geo=guides, name=f"{target}{after_prefix}")
-        #beforeCtrl.parent.connect(target_node.xform)
     graph.AddSetPointTransforms("pointtransform", new_controls, srcport="xform")
     
     
@@ -55,11 +63,6 @@ addToMultiparm(add_controls, "PromoteT", True, preset_kwargs={'joins_with_next':
 addToMultiparm(add_controls, "PromoteR", True, preset_kwargs={'joins_with_next':1})
 addToMultiparm(add_controls, "PromoteS", False)
 
-# Get guide geo
-#guidesource: String = BindInput()
-#_, guides, _ = FindCharacterElement(character=character, primpath=guidesource)
-
-
 for ctrl in add_controls:
     target_ctrl_name : String = ctrl["TargetControlName#"]
     trf_pos : Int = ctrl["NewTransformPosition#"]
@@ -79,3 +82,11 @@ for ctrl in add_controls:
                                promote_t,
                                promote_r,
                                promote_s)
+
+
+
+### footer end
+character.updateRig(graph_name=rigname, graph=graph, bypass=bypass)
+BindOutput(character)
+BindOutput(rig=graph)
+
