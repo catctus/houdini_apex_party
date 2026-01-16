@@ -37,6 +37,7 @@ def AddControl(graph: ApexGraphHandle,
     
     matchname = rkutil.FirstNodeNameFromPattern(graph, match)
     
+    
     if matchname == "":
         matchxform:Matrix4 = value(); 
     else:
@@ -133,6 +134,9 @@ def BuildControl(graph:ApexGraphHandle,
                  parent:String = "",      
                  buildSecondaryCtr:Bool=True,
                  buildOffsetCtr:Bool=True,
+                 controlData: Dict = {},
+                 offsetControlData: Dict = {},
+                 secondaryControlData: Dict = {},
                  controlSuffix:String="ctr",
                  offsetSuffix:String="offset",
                  secondarySuffix:String="secondary")->tuple[ApexGraphHandle, Geometry]:
@@ -142,17 +146,27 @@ def BuildControl(graph:ApexGraphHandle,
     guideparentname : String = guideparent.name()
     pos = guides.getPointTransform(name=guidename)
     
+    # create the main control
+    ctrShape : String = controlData.get("shape", "cross_wires")
+    offsetCtrShape : String = offsetControlData.get("shape", "cross_wires")
+    secCtrShape : String = secondaryControlData.get("shape", "cross_wires")
+    
     if buildOffsetCtr:
-        guides, offsetCtr = graph.AddControl(guides, f"{name}_{offsetSuffix}_{controlSuffix}", match=guidename, parent=parent)
+        guides, offsetCtr = graph.AddControl(guides, f"{name}_{offsetSuffix}_{controlSuffix}", 
+                                             match=guidename, parent=parent,
+                                             shape=offsetCtrShape)
         parent = offsetCtr.name()
     
-    # create the main control
-    guides, mainctr = graph.AddControl(guides, f"{name}_{controlSuffix}", match=guidename, parent=parent)
+    
+    guides, mainctr = graph.AddControl(guides, f"{name}_{controlSuffix}", match=guidename, parent=parent,
+                                       shape=ctrShape)
     driver : String =mainctr.name()
     
     # create the secondary controls
     if buildSecondaryCtr:
-        guides, secctr = graph.AddControl(guides, f"{name}_{secondarySuffix}_{controlSuffix}", match=guidename, parent=mainctr.name())        
+        guides, secctr = graph.AddControl(guides, f"{name}_{secondarySuffix}_{controlSuffix}", 
+                                          match=guidename, parent=mainctr.name(),
+                                          shape=secCtrShape)        
         driver=secctr.name()
         
     guides = graph.AddConstraint(guides, driver, guidename)
@@ -174,6 +188,22 @@ def AddControlsMulti(graph:ApexGraphHandle, guides:Geometry, setups: DictArray)-
         nodes:ApexNodeIDArray = graph.FindNodes(graph=graph,
                                                 pattern=guide)
         
+        # control data dict
+        ctrDataDict : Dict = Dict()
+        ctrShape : String = s["controlShape#"]
+        ctrDataDict["shape"] = ctrShape
+        
+        # secondary data dict
+        offsetCtrDataDict : Dict = Dict()
+        offsetControlShape : String = s["secondaryControlShape#"]
+        offsetCtrDataDict["shape"] = offsetControlShape
+        
+        
+        # offset data dict
+        secCtrDataDict : Dict = Dict()
+        secCtrShape : String = s["offsetControlShape#"]
+        secCtrDataDict["shape"] = secCtrShape
+        
         for i, node in enumerate(nodes):
             name : String = node.name()
             # check if we are using custom name, in that case update
@@ -194,7 +224,10 @@ def AddControlsMulti(graph:ApexGraphHandle, guides:Geometry, setups: DictArray)-
                                         name=name, 
                                         parent=controlParent,
                                         buildSecondaryCtr=buildSecondaryCtr,
-                                        buildOffsetCtr=buildOffsetCtr)
+                                        buildOffsetCtr=buildOffsetCtr,
+                                        controlData = ctrDataDict,
+                                        offsetControlData=offsetCtrDataDict,
+                                        secondaryControlData=secCtrDataDict)
 
     
     graph.layout()
@@ -225,19 +258,15 @@ addToFolder("ControlSetup", ["guideTarget#", "useGuideTargetParent#", "controlPa
                              "customControlName#", "buildSecondary#", 
                              "buildOffset#"], parent="setups")
 
-addToFolder("ControlShapes", ["controlShape#", "offsetControlShape#", 
-                             "parentControlShape#", "_shapeReference#"], parent="setups")
+addToFolder("ControlShapes", ["controlShape#", "secondaryControlShape#", 
+                             "offsetControlShape#", "_shapeReference#"], parent="setups")
                              
-#! add parent or use target parent
-
 
 # settings
 controlSuffix : String = bindInput("ctr",preset_kwargs={'joins_with_next':1})
 offsetSuffix : String = bindInput("offset",preset_kwargs={'joins_with_next':1})
 secondarySuffix : String = bindInput("secondary")
 guidesource: String = bindInput("Guides.skel")
-
-
 addToFolder("Build", [setups])
 addToFolder("Settings", [controlSuffix, offsetSuffix, secondarySuffix, guidesource])
 
