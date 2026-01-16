@@ -37,7 +37,6 @@ def AddControl(graph: ApexGraphHandle,
     
     matchname = rkutil.FirstNodeNameFromPattern(graph, match)
     
-    
     if matchname == "":
         matchxform:Matrix4 = value(); 
     else:
@@ -126,62 +125,7 @@ def AddConstraint(graph : ApexGraphHandle,
 
 
     return graph, guides
-"""
-# constraint
-def AddConstraints(graph: ApexGraphHandle, 
-                   guides: Geometry, 
-                   drivernode: ApexNodeID, 
-                   drivername: String, 
-                   driven: String, 
-                   components: Int,  
-                   ingnoreoffset: Bool, 
-                   drivenoffsetctrls: Bool,
-                   parentconstaint: Bool):
-                   
-        
-        nodes = graph.findNodes(f'{driven} - {drivername}')
-        driverxform = guides.getPointTransform(drivername)
-        
-        for node in nodes:
-            
-            drivenname = node.name()
-            
-            if drivenoffsetctrls:
-                guides, drivenname, drivernode, driverxform = graph.AddConstraintControls(guides=guides, name=drivenname, 
-                                                                                          driver=drivername, node=node, 
-                                                                                          promote=True, parent=drivername)
-            
-            if parentconstaint:
-                original_node = node
-                reset: Matrix4 = value()
-                drivenjnt = guides.findJoint(drivenname)
-                originalnodeparentpt = guides.getParent(drivenjnt)
-                originalnodeparentname = guides.jointData(originalnodeparentpt)
-                
-                guides, drivenname, node = graph.AddConstraintControls(guides=guides, name=drivenname, 
-                                                                       driver=drivername, node=node, 
-                                                                       promote=False, parent=originalnodeparentname)
-                node.xform_out.connect(original_node.parent_in)
-                node.localxform_out.connect(original_node.parentlocal_in)
-                original_node.updateNode(parms={'restlocal':reset})
-                
-                
-            drivenxform = guides.getPointTransform(drivenname)
-            ingnore_offset_xform = twoWaySwitch(drivenxform, driverxform, ingnoreoffset)
-            
-            parentblend_parms = {'newparent_bind':driverxform, 
-                                 'parent_bind':ingnore_offset_xform, 'parent':ingnore_offset_xform,
-                                 'blend':1.0, 'components':components}
-            drivenname = f'{drivenname}_TransformDriverBlend'
-            parentblend = graph.addOrUpdateNode(name=drivenname, callback='rig::ParentBlend',
-                                                parms=parentblend_parms)
-            parentblend.parent_out.connect(node.xform_in)
-            drivernode.xform_out.connect(parentblend.newparent_in)
 
-
-
-        return graph, guides
-"""
 def BuildControl(graph:ApexGraphHandle, 
                  guides:Geometry, 
                  guideTarget:ApexNodeID, 
@@ -302,8 +246,6 @@ addToFolder("Settings", [controlSuffix, offsetSuffix, secondarySuffix, guidesour
 guides : Geometry = character.findCharacterElement(guidesource)
 guides = graph.AddControlsMulti(guides=guides, setups=setups)
 character.updateCharacterElement(guidesource, guides)
-
-
 
 ### footer end
 character.updateRig(graph_name=rigname, graph=graph, bypass=bypass)
