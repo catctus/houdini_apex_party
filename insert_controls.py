@@ -11,7 +11,6 @@ graph: ApexGraphHandle = BindInput(rig=ApexGraphHandle())
 bypass: Bool = BindInput()
 rigname, graph = character.getRig(graph_name=rigname, graph=graph, bypass=bypass)
 ##### header end #####
-
 # we want to make this into a subgraph
 def AddControl(graph:ApexGraphHandle, 
                guides:Geometry,
@@ -73,14 +72,34 @@ def AddControl(graph:ApexGraphHandle,
     return graph, guides, control
                   
 
-def buildControl(graph:ApexGraphHandle, guides:Geometry, guideTarget:ApexNodeID, name:String)->tuple[ApexGraphHandle, Geometry]:
+def BuildControl(graph:ApexGraphHandle, 
+                 guides:Geometry, 
+                 guideTarget:ApexNodeID, 
+                 name:String,
+                 parent:String = "",      
+                 buildSecondaryCtr:Bool=True,
+                 buildOffsetCtr:Bool=True,
+                 controlSuffix:String="ctr",
+                 offsetSuffix:String="offset",
+                 secondarySuffix:String="secondary")->tuple[ApexGraphHandle, Geometry]:
     
     guidename :String = guideTarget.name()
     guideparent : ApexNodeID = graph.GetTransformParent(guideTarget)
     guideparentname : String = guideparent.name()
     pos = guides.getPointTransform(name=guidename)
     
-    graph.AddControl(guides, name, match=guidename)
+    if buildOffsetCtr:
+        guides, offsetCtr = graph.AddControl(guides, f"{name}_{offsetSuffix}_{controlSuffix}", match=guidename, parent=parent)
+        parent = offsetCtr.name()
+    
+    # create the main control
+    guides, mainctr = graph.AddControl(guides, f"{name}_{controlSuffix}", match=guidename, parent=parent)
+    driver=mainctr
+    
+    # create the secondary controls
+    if buildSecondaryCtr:
+        guides, secctr = graph.AddControl(guides, f"{name}_{secondarySuffix}_{controlSuffix}", match=guidename, parent=mainctr.name())        
+        driver=secctr
     
     """
     ctrlxform, ctrlpt, ctrname = guides.findOrAddGuide(name=name,
@@ -110,13 +129,16 @@ def buildControl(graph:ApexGraphHandle, guides:Geometry, guideTarget:ApexNodeID,
     return graph, guides
 
     
-def AddControls(graph:ApexGraphHandle, guides:Geometry, setups: DictArray)->tuple[ApexGraphHandle, Geometry]:
+def AddControlsMulti(graph:ApexGraphHandle, guides:Geometry, setups: DictArray)->tuple[ApexGraphHandle, Geometry]:
 
     for s in setups:
         guide : String = s["guideTarget#"]
         useGuideName : Bool = s["useGuideName#"]
         customName : String = s["customControlName#"]
-        
+        controlParent : String = s["controlParent#"]
+        useGuideTargetParent : Bool = s["useGuideTargetParent"]
+        buildSecondaryCtr : Bool = s["buildSecondary#"]
+        buildOffsetCtr : Bool = s["buildOffset#"]
         # to find nodes based on tag
         nodes:ApexNodeIDArray = graph.FindNodes(graph=graph,
                                                 pattern=guide)
@@ -130,9 +152,17 @@ def AddControls(graph:ApexGraphHandle, guides:Geometry, setups: DictArray)->tupl
                 else:
                     name = customName
             
-            name = name + "_ctr"
+            if useGuideTargetParent:
+                controlParent = node.parent().name()
+            
+            
             #buildControl(graph:ApexGraphHandle, guides:Geometry, guideTarget: ApexNodeID, name:String)
-            guides = graph.buildControl(guides=guides, guideTarget=node, name=name)
+            guides = graph.buildControl(guides=guides, 
+                                        guideTarget=node, 
+                                        name=name, 
+                                        parent=controlParent,
+                                        buildSecondaryCtr=buildSecondaryCtr,
+                                        buildOffsetCtr=buildOffsetCtr)
 
     
     graph.layout()
@@ -143,6 +173,11 @@ setups = bindMultiparm()
 
 # control build
 addToMultiparm(setups, "guideTarget", "", preset_kwargs ={"prompt_text":"name/pattern/tag", "label":"Guide Target(s)"})
+
+addToMultiparm(setups, "useGuideTargetParent", True, preset_kwargs ={"joins_with_next":1})
+addToMultiparm(setups, "controlParent", "", preset_kwargs ={"prompt_text":"Parent To", 
+                                                            "disable_when":'{useGuideTargetParent# == 1}'})
+                                                            
 addToMultiparm(setups, "useGuideName", True, preset_kwargs={'joins_with_next':1})
 addToMultiparm(setups, "customControlName", "", preset_kwargs ={"prompt_text":"name_<controlPrefix>", "disable_when":'{useGuideName# == 1}'})
 addToMultiparm(setups, "buildSecondary", True, preset_kwargs={'joins_with_next':1})
@@ -153,7 +188,7 @@ addToMultiparm(setups, "offsetControlShape", "cross_wires", preset_kwargs={'join
 addToMultiparm(setups, "parentControlShape", "cross_wires", preset_kwargs={'joins_with_next':1})
 addToMultiparm(setups, "_shapeReference", "cross_wires", preset='controlshapes')
 
-addToFolder("ControlSetup", ["guideTarget#", "useGuideName#", 
+addToFolder("ControlSetup", ["guideTarget#", "useGuideTargetParent#", "controlParent#", "useGuideName#", 
                              "customControlName#", "buildSecondary#", 
                              "buildOffset#"], parent="setups")
 
@@ -164,21 +199,20 @@ addToFolder("ControlShapes", ["controlShape#", "offsetControlShape#",
 
 
 # settings
-controlPrefix : String = bindInput("ctr",preset_kwargs={'joins_with_next':1})
-offsetPrefix : String = bindInput("offset",preset_kwargs={'joins_with_next':1})
-secondaryPrefix : String = bindInput("secondary")
+controlSuffix : String = bindInput("ctr",preset_kwargs={'joins_with_next':1})
+offsetSuffix : String = bindInput("offset",preset_kwargs={'joins_with_next':1})
+secondarySuffix : String = bindInput("secondary")
 guidesource: String = bindInput("Guides.skel")
 
 
 addToFolder("Build", [setups])
-addToFolder("Settings", [controlPrefix, offsetPrefix, secondaryPrefix, guidesource])
+addToFolder("Settings", [controlSuffix, offsetSuffix, secondarySuffix, guidesource])
 
 
 #Setup
 guides : Geometry = character.findCharacterElement(guidesource)
-guides = graph.AddControls(guides=guides, setups=setups)
+guides = graph.AddControlsMulti(guides=guides, setups=setups)
 character.updateCharacterElement(guidesource, guides)
-
 
 
 
