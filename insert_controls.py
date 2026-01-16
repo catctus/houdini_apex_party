@@ -12,97 +12,171 @@ bypass: Bool = BindInput()
 rigname, graph = character.getRig(graph_name=rigname, graph=graph, bypass=bypass)
 ##### header end #####
 
+# we want to make this into a subgraph
+def AddControl(graph:ApexGraphHandle, 
+               guides:Geometry,
+               name:String,
+               match:String="",
+               parent:String="",
+               promote:String ="t r s", 
+               shapescale:Vector3 = Vector3(1,1,1),
+               shape:String = "cross_wires",
+               shapeColor:Vector3 = Vector3(0,1,0),
+               shapeTranslate:Vector3 = Vector3(0,0,0),
+               shapeRotate:Vector3 = Vector3(0,0,0),
+               shapeScale: Vector3 = Vector3(1,1,1),
+               translateOffset:Vector3 = Vector3(0,0,0),
+               rotateOffset:Vector3 = Vector3(0,0,0),
+               scaleOffset:Vector3 = Vector3(1,1,1),
+               offsetMode:Int = 0,
+               rotateOrder:Int = 0,
+               scaleInheritance:Int=0,
+               transformOrder:Int = 0,
+               overrideControl:Bool = True,
+               setShapeData:Bool = True,
+               tags:StringArray=[])->tuple[ApexGraphHandle, Geometry, ApexNodeID]:
+    
+    matchname = rkutil.FirstNodeNameFromPattern(graph, match)
+    
+    if matchname == "":
+        matchxform:Matrix4 = value(); 
+    else:
+        matchxform:Matrix4 = guides.GetPointTransform(matchname)
+    
+    offsetxform = apex.transform.build(translateOffset, rotateOffset, scaleOffset)
+    
+    xform, overridexform = rktrf.AddOffsets(matchxform, offsetxform)
+    
+    ctrlxform, ctrlpt, ctrname = guides.FindOrAddGuide(name=name,
+                                                       xform=xform,
+                                                       scaleinheritance=scaleInheritance,
+                                                       rord=rotateOrder,
+                                                       parent=parent,
+                                                       promote=promote,
+                                                       shape=shape,
+                                                       shapetranslate=shapeTranslate,
+                                                       shaperotate=shapeRotate,
+                                                       shapescale=shapeScale,
+                                                       shapecolor=shapeColor,
+                                                       overridecontrol=overrideControl,
+                                                       setshapedata=setShapeData,
+                                                       tags=tags
+                                                       )
+    
+    guides.updateJoint(ptnum=ctrlpt, name=ctrname, xform=ctrlxform)
+    
+    pattern = f"@name={ctrname}"
+    guides, nodeids = graph.controlsFromGuides(geo=guides, group=pattern)
+    
+    control : ApexNodeID = nodeids[0]
+    
+    return graph, guides, control
+                  
 
-def addExtraControls(graph: ApexGraphHandle, 
-                     guides: Geometry,
-                     setups: DictArray) -> tuple[ApexGraphHandle, Geometry]:
+def buildControl(graph:ApexGraphHandle, guides:Geometry, guideTarget:ApexNodeID, name:String)->tuple[ApexGraphHandle, Geometry]:
     
-    for setup in setups:
+    guidename :String = guideTarget.name()
+    guideparent : ApexNodeID = graph.GetTransformParent(guideTarget)
+    guideparentname : String = guideparent.name()
+    pos = guides.getPointTransform(name=guidename)
     
-        target : String = setup["TargetControlName#"]
-        trf_pos : Int = setup["NewTransformPosition#"]
-        after_prefix : String = setup["PrefixAfterControl#"]
-        before_prefix : String = setup["PrefixBeforeControl#"]
-        promote_t : Bool = setup["PromoteT#"]
-        promote_r : Bool = setup["PromoteR#"]
-        promote_s : Bool = setup["PromoteS#"]
-        
-        # gather data
-        target_node = graph.findNode(target)
-        parent_node = graph.GetTransformParent(target_node)
-        children_node_array : ApexNodeIDArray = graph.GetTransformChildren(target_node)
-        
-        new_controls : ApexNodeIDArray = []
-        # if we building an after control (or both)
-        if trf_pos == 0 or trf_pos==2:
-            pos = guides.getPointTransform(name=target)
-            _, driverpt, drivername = guides.findOrAddGuide(name=f"{target}{after_prefix}",
-                                  xform=pos,
-                                  parent=target,
-                                  promote="t r s",
-                                  shapescale=(10,10,10),
-                                  shape="cross_wires",
-                                  overridecontrol=True,
-                                  setshapedata=True,
-                                  )
-            guides.updateJoint(ptnum=driverpt, name=drivername, xform=pos)
-            
-            pattern = f'@name={drivername}'
-            #parentname = NodeFromPattern(driverparent)
-            #guides.SetParent(pattern, driverpt)
-            guides = graph.controlsFromGuides(geo=guides, group=pattern)
-            
-            #guides.AddSetPointTransforms(name=drivername)
-            
-            graph.layout()
-            
-            
-        """
-            beforeCtrl = graph.addNode(f"{target}{after_prefix}", callback="TransformObject")
-            #graph.UpdateNodeParms(beforeCtrl, {"properties":{shapescale:(10,10,10)}})
-            if promote_t:
-                beforeCtrl.t_in.promote(f"{target}{after_prefix}_t")
-            if promote_r:
-                beforeCtrl.r_in.promote(f"{target}{after_prefix}_r")
-            if promote_s:
-                beforeCtrl.s_in.promote(f"{target}{after_prefix}_s")
-            
-            target_node.xform_out.connect(beforeCtrl.parent_in)
-            
-            for child_node in children_node_array:
-                beforeCtrl.xform_out.connect(child_node.parent_in)
-                target_node.localxform_out.connect(child_node.parentlocal_in)
-                
-            
-            new_controls.append(beforeCtrl)
-        """ 
-        #graph.AddSetPointTransforms("pointtransform", new_controls, srcport="xform")
+    graph.AddControl(guides, name, match=guidename)
     
-    graph.layout()
+    """
+    ctrlxform, ctrlpt, ctrname = guides.findOrAddGuide(name=name,
+                                                       xform=pos,
+                                                       parent=guideparentname,
+                                                       promote="t r s",
+                                                       shapescale=(10,10,10),
+                                                       shape="cross_wires",
+                                                       overridecontrol=True,
+                                                       setshapedata=True,
+                                                      )
+    guides.updateJoint(ptnum=ctrlpt, name=ctrname, xform=pos)
     
+    pattern = f"@name={ctrname}"
+    guides, nodeids = graph.controlsFromGuides(geo=guides, group=pattern)
+    
+    ctrlNode : ApexNodeID = nodeids[0]
+    
+    ctrlNode.xform_out.connect(guideTarget.parent_in)
+    ctrlNode.localxform_out.connect(guideTarget.parentlocal_in)
+    
+    reset : Matrix4 = value()
+    
+    guideTarget.updateNode(parms={'restlocal':reset})
+    """
+
     return graph, guides
 
-# create a bind multiparam
-setups = bindMultiparm(preset_kwargs={"label":"test"})
+    
+def AddControls(graph:ApexGraphHandle, guides:Geometry, setups: DictArray)->tuple[ApexGraphHandle, Geometry]:
 
-addToMultiparm(setups, "TargetControlName", "")
-addToMultiparm(setups, "NewTransformPosition", 0, 
-               preset='menu',
-               preset_kwargs={'menu_labels':['after', 'before', 'both'],
-                              'menu_items':[0,1,2]})
-addToMultiparm(setups, "PrefixAfterControl", "_secondary",preset_kwargs={'joins_with_next':1})
-addToMultiparm(setups, "PrefixBeforeControl", "_offset", preset_kwargs={"disable_when":"{NewTransformPosition==2}"})
+    for s in setups:
+        guide : String = s["guideTarget#"]
+        useGuideName : Bool = s["useGuideName#"]
+        customName : String = s["customControlName#"]
+        
+        # to find nodes based on tag
+        nodes:ApexNodeIDArray = graph.FindNodes(graph=graph,
+                                                pattern=guide)
+        
+        for i, node in enumerate(nodes):
+            name : String = node.name()
+            # check if we are using custom name, in that case update
+            if not useGuideName:
+                if len(nodes)>1:
+                    name = f"{customName}_{i}"
+                else:
+                    name = customName
+            
+            name = name + "_ctr"
+            #buildControl(graph:ApexGraphHandle, guides:Geometry, guideTarget: ApexNodeID, name:String)
+            guides = graph.buildControl(guides=guides, guideTarget=node, name=name)
 
-# could maybe split this up as well.. 
-addToMultiparm(setups, "PromoteT", True, preset_kwargs={'joins_with_next':1})
-addToMultiparm(setups, "PromoteR", True, preset_kwargs={'joins_with_next':1})
-addToMultiparm(setups, "PromoteS", False)
+    
+    graph.layout()
+    return graph, guides
 
-guidesource: String = bindInput()
+
+setups = bindMultiparm()
+
+# control build
+addToMultiparm(setups, "guideTarget", "", preset_kwargs ={"prompt_text":"name/pattern/tag", "label":"Guide Target(s)"})
+addToMultiparm(setups, "useGuideName", True, preset_kwargs={'joins_with_next':1})
+addToMultiparm(setups, "customControlName", "", preset_kwargs ={"prompt_text":"name_<controlPrefix>", "disable_when":'{useGuideName# == 1}'})
+addToMultiparm(setups, "buildSecondary", True, preset_kwargs={'joins_with_next':1})
+addToMultiparm(setups, "buildOffset", False, preset_kwargs={'joins_with_next':1})
+
+addToMultiparm(setups, "controlShape", "cross_wires", preset_kwargs={'joins_with_next':1})
+addToMultiparm(setups, "offsetControlShape", "cross_wires", preset_kwargs={'joins_with_next':1})
+addToMultiparm(setups, "parentControlShape", "cross_wires", preset_kwargs={'joins_with_next':1})
+addToMultiparm(setups, "_shapeReference", "cross_wires", preset='controlshapes')
+
+addToFolder("ControlSetup", ["guideTarget#", "useGuideName#", 
+                             "customControlName#", "buildSecondary#", 
+                             "buildOffset#"], parent="setups")
+
+addToFolder("ControlShapes", ["controlShape#", "offsetControlShape#", 
+                             "parentControlShape#", "_shapeReference#"], parent="setups")
+                             
+#! add parent or use target parent
+
+
+# settings
+controlPrefix : String = bindInput("ctr",preset_kwargs={'joins_with_next':1})
+offsetPrefix : String = bindInput("offset",preset_kwargs={'joins_with_next':1})
+secondaryPrefix : String = bindInput("secondary")
+guidesource: String = bindInput("Guides.skel")
+
+
+addToFolder("Build", [setups])
+addToFolder("Settings", [controlPrefix, offsetPrefix, secondaryPrefix, guidesource])
+
 
 #Setup
-guides = character.findCharacterElement(guidesource)
-guides = graph.addExtraControls(guides=guides, setups=setups)
+guides : Geometry = character.findCharacterElement(guidesource)
+guides = graph.AddControls(guides=guides, setups=setups)
 character.updateCharacterElement(guidesource, guides)
 
 
