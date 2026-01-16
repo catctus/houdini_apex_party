@@ -12,6 +12,7 @@ bypass: Bool = BindInput()
 rigname, graph = character.getRig(graph_name=rigname, graph=graph, bypass=bypass)
 ##### header end #####
 # we want to make this into a subgraph
+# we want to make this into a subgraph
 def AddControl(graph:ApexGraphHandle, 
                guides:Geometry,
                name:String,
@@ -136,7 +137,7 @@ def AddControlsMulti(graph:ApexGraphHandle, guides:Geometry, setups: DictArray)-
         useGuideName : Bool = s["useGuideName#"]
         customName : String = s["customControlName#"]
         controlParent : String = s["controlParent#"]
-        useGuideTargetParent : Bool = s["useGuideTargetParent"]
+        useGuideTargetParent : Bool = s["useGuideTargetParent#"]
         buildSecondaryCtr : Bool = s["buildSecondary#"]
         buildOffsetCtr : Bool = s["buildOffset#"]
         # to find nodes based on tag
@@ -153,7 +154,8 @@ def AddControlsMulti(graph:ApexGraphHandle, guides:Geometry, setups: DictArray)-
                     name = customName
             
             if useGuideTargetParent:
-                controlParent = node.parent().name()
+                controlParentNode = graph.GetTransformParent(node)
+                controlParent = controlParentNode.name()
             
             
             #buildControl(graph:ApexGraphHandle, guides:Geometry, guideTarget: ApexNodeID, name:String)
